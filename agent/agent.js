@@ -155,13 +155,7 @@ hqServer.on('connection', (ws) => {
             } else if (data.type === 'GET_TODOS') {
                 ws.send(JSON.stringify({ type: 'STATE_UPDATE', todos: getTodos(ws.username) }));
             } else if (data.type === 'SEND_CHAT') {
-                // Forward to Gateway (if connected)
-                // We construct a payload the gateway keyer/broadcaster understands
-                // Gateway expects: { chatId, text }
-
-                // Problem: We need the chatId to reply to.
-                // The UI doesn't know the chatId unless we stored it or mapped it.
-                // We have 'users[wallet].telegramId'.
+                // 1. Forward to Gateway (Telegram)
                 const tid = users[ws.username]?.telegramId;
                 if (tid && gatewayWs && gatewayWs.readyState === WebSocket.OPEN) {
                     gatewayWs.send(JSON.stringify({
@@ -169,7 +163,24 @@ hqServer.on('connection', (ws) => {
                         text: data.text
                     }));
                 } else {
-                    console.log("Cannot send chat: No Telegram Link or Gateway Offline");
+                    // Offline handling? 
+                }
+
+                // 2. Helper: Send AI "Thinking" state?
+                // For now, just ask AI
+                const reply = await askAlon(data.text, ws.username);
+
+                // 3. Send AI Reply to User (Web)
+                ws.send(JSON.stringify({
+                    type: 'CHAT_INCOMING',
+                    text: reply,
+                    from: 'Alon',
+                    sender: 'Alon'
+                }));
+
+                // 4. Also forward AI reply to Telegram (so the history is complete)
+                if (tid && gatewayWs) {
+                    gatewayWs.send(JSON.stringify({ chatId: tid, text: reply }));
                 }
             }
 
@@ -191,6 +202,43 @@ function broadcastState(username) {
     });
 }
 
+// --- OpenAI Integration ---
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
+
+const ALON_SYSTEM_PROMPT = `
+You are Alon, a wealthy, successful, and slightly arrogant crypto whale.
+Your traits:
+- You own the "Alon Clawd Headquarters".
+- You love Solana ($SOL) and hate "jeets" (paper hands).
+- You speak in short, punchy sentences.
+- Catchphrase: "Stop being poor."
+- You are helpful but condescending. You want your users to succeed so they can stop being poor.
+- Use emojis like 🚀, 💎, 🕶️, 🍷.
+
+Context: You are replying to a user in your Command Center.
+`;
+
+async function askAlon(userText, username) {
+    try {
+        if (!process.env.OPENAI_API_KEY) return "My brain is offline. (Missing API Key)";
+
+        const completion = await openai.chat.completions.create({
+            messages: [
+                { role: "system", content: ALON_SYSTEM_PROMPT },
+                { role: "user", content: `${username} says: ${userText}` }
+            ],
+            model: "gpt-4o",
+        });
+
+        return completion.choices[0].message.content;
+    } catch (e) {
+        console.error("OpenAI Error:", e);
+        return "I'm too rich to answer right now. (Error)";
+    }
+}
+
 // --- Clawd Gateway Client ---
 let gatewayWs;
 
@@ -202,7 +250,7 @@ function connectToGateway() {
         console.log('Connected to Clawd Gateway!');
     });
 
-    gatewayWs.on('message', (data) => {
+    gatewayWs.on('message', async (data) => {
         try {
             const msg = JSON.parse(data.toString());
 
@@ -211,75 +259,62 @@ function connectToGateway() {
 
             // Handle flattened payload from custom Gateway
             if (msg.payload && msg.payload.message) {
-                // Standard Clawd-like
                 text = msg.payload.message.text || msg.payload.message.conversation || "";
                 telegramId = msg.payload.from || msg.payload.key?.remoteJid;
-            } else if (msg.text && msg.chatId) {
-                // Direct custom gateway payload
+            } else if (msg.chatId && msg.text) {
                 text = msg.text;
                 telegramId = msg.chatId.toString();
             }
 
             if (!text || !telegramId) return;
 
-            // Handle /link command
+            // Handle /link command (Priority)
             if (text.startsWith('/link ')) {
                 const code = text.replace('/link ', '').trim();
                 const linkData = linkCodes[code];
 
                 if (linkData && linkData.expires > Date.now()) {
-                    // Success! Link User
                     const walletAddress = linkData.username;
-
                     if (!users[walletAddress]) users[walletAddress] = {};
                     users[walletAddress].telegramId = telegramId;
-
                     saveUsers();
                     delete linkCodes[code];
-
                     console.log(`Linked Wallet ${walletAddress} to Telegram ${telegramId}`);
-                    // Optional: Send reply back via Gateway?
+
+                    // Welcome Message
+                    const welcome = await askAlon("I just linked my wallet.", "New Recruit");
+                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: welcome }));
                 } else {
                     console.log(`Invalid link code from ${telegramId}`);
                 }
                 return;
             }
 
+            // Determine User
+            let username = null;
+            for (const [wallet, data] of Object.entries(users)) {
+                if (data.telegramId === telegramId) {
+                    username = wallet;
+                    break;
+                }
+            }
+            const displayName = username ? `${username.slice(0, 4)}...` : "Anons";
+
             // If text starts with /todo
             if (text.startsWith('/todo ')) {
-                // Find user
-                let username = null;
-                for (const [wallet, data] of Object.entries(users)) {
-                    if (data.telegramId === telegramId) {
-                        username = wallet;
-                        break;
-                    }
-                }
-
                 if (username) {
                     const taskText = text.replace('/todo ', '').trim();
-                    console.log(`Adding task for ${username}: ${taskText}`);
                     getTodos(username).push({ id: Date.now(), text: taskText, done: false });
                     saveTodos(username);
                     broadcastState(username);
 
-                    // Optional: Broadcast chat message to UI
-                    // hqServer.clients.forEach ...
-                } else {
-                    console.log(`Received command from unknown ID ${telegramId}. Please /link first!`);
+                    // Reply
+                    const reply = await askAlon(`I just added a task: ${taskText}`, displayName);
+                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: reply }));
                 }
             } else {
-                // Standard Chat Message - Broadcast to UI!
-                // Find who this telegram user belongs to
-                let username = null;
-                for (const [wallet, data] of Object.entries(users)) {
-                    if (data.telegramId === telegramId) {
-                        username = wallet;
-                        break;
-                    }
-                }
-
-                // If we know the user, send to their UI
+                // Chat Message -> AI Reply
+                // 1. Broadcast to Web UI (if linked)
                 if (username) {
                     const chatMsg = JSON.stringify({
                         type: 'CHAT_INCOMING',
@@ -293,10 +328,34 @@ function connectToGateway() {
                         }
                     });
                 }
+
+                // 2. Generate AI Reply
+                // Only reply if not a command and roughly targeting the bot
+                // For direct DMs, always reply.
+                // We'll reply to everything for now as a "Chatbot"
+                const aiReply = await askAlon(text, displayName);
+
+                // 3. Send AI Reply to Telegram
+                gatewayWs.send(JSON.stringify({ chatId: telegramId, text: aiReply }));
+
+                // 4. Send AI Reply to Web UI (if linked)
+                if (username) {
+                    const webReply = JSON.stringify({
+                        type: 'CHAT_INCOMING',
+                        text: aiReply,
+                        from: 'Alon',
+                        sender: 'Alon'
+                    });
+                    hqServer.clients.forEach(client => {
+                        if (client.readyState === WebSocket.OPEN && client.username === username) {
+                            client.send(webReply);
+                        }
+                    });
+                }
             }
 
         } catch (e) {
-            // ignore
+            console.error(e);
         }
     });
 
