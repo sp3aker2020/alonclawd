@@ -176,6 +176,9 @@ function connectToHQ() {
         if (data.type === 'LINK_CODE') {
             document.getElementById('link-code-display').textContent = data.code;
         }
+        if (data.type === 'CHAT_INCOMING') {
+            addChatMessage(data.text, 'received');
+        }
     };
 
     hqWs.onclose = () => {

@@ -282,6 +282,7 @@ function connectToGateway() {
                 // If we know the user, send to their UI
                 if (username) {
                     const chatMsg = JSON.stringify({
+                        type: 'CHAT_INCOMING',
                         text: text,
                         from: 'Telegram',
                         sender: msg.sender || 'User'
