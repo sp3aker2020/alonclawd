@@ -6,6 +6,7 @@ const bs58 = require('bs58');
 const { TextEncoder } = require('util');
 const express = require('express');
 const http = require('http');
+const { OpenAI } = require('openai');
 
 // Configuration
 const GATEWAY_URL = process.env.GATEWAY_URL || 'ws://127.0.0.1:18789';
