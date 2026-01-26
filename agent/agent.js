@@ -94,7 +94,7 @@ hqServer.on('connection', (ws) => {
     ws.isAlive = true;
     ws.username = null; // Stores Wallet Address
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
 
