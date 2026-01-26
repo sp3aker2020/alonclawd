@@ -1,0 +1,28 @@
+services:
+  # 1. The Gateway (Adapts Telegram)
+  - type: web
+    name: alon-gateway
+    env: node
+    plan: free
+    buildCommand: cd gateway && npm install
+    startCommand: cd gateway && node index.js
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false # User will input this in Render Dashboard
+    autoDeploy: true
+
+  # 2. The Agent (Headquarters + Web UI)
+  - type: web
+    name: alon-agent
+    env: node
+    plan: free
+    buildCommand: cd agent && npm install
+    startCommand: cd agent && node agent.js
+    envVars:
+      - key: GATEWAY_URL
+        fromService:
+          type: web
+          name: alon-gateway
+          property: host
+        value: "ws://0.0.0.0:10000" # Hacky: Need to construct wss://...
+    autoDeploy: true

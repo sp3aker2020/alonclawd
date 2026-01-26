@@ -1,0 +1,11 @@
+{
+    "tokens": {
+        "telegram": "8550672625:AAGt4AIjbkiV9bOZEkN7hBtiik_XfrZAq2M"
+    },
+    "adapters": [
+        "telegram"
+    ],
+    "websocket": {
+        "port": 18789
+    }
+}

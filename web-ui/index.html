@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alon Clawd HQ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- 1. Unified Overlay System -->
+    <div id="modal-container" class="modal-layer">
+        <!-- Login Screen -->
+        <div id="login-screen" class="modal-content">
+            <div class="mascot-container">
+                <img src="assets/brand/mascot.png" alt="Alon Mascot">
+            </div>
+            <h1 class="logo-text">ALON <span>HQ</span></h1>
+            <p class="subtitle" style="margin-bottom: 2rem; color: var(--text-dim);">Stop Being Poor. Start Managing
+                Assets.</p>
+            <div class="auth-section">
+                <button id="connect-wallet-btn" class="primary-btn wallet-connect">
+                    Connect Phantom
+                </button>
+                <div id="login-error" class="status-msg error" style="margin-top: 1rem; color: var(--danger);"></div>
+            </div>
+        </div>
+
+        <!-- Link Telegram Modal -->
+        <div id="link-modal" class="modal-content hidden">
+            <h1 class="logo-text" style="font-size: 1.5rem">Link <span>Telegram</span></h1>
+            <p style="margin: 1.5rem 0; color: var(--text-dim);">Send this command to your Alon Bot:</p>
+            <div class="code-box">
+                <code id="link-code-display">000000</code>
+            </div>
+            <p class="hint" style="font-size: 0.8rem; color: var(--text-dim);">/link &lt;code&gt;</p>
+            <button id="close-link-modal" class="primary-btn"
+                style="margin-top: 2rem; padding: 0.5rem 2rem;">Close</button>
+        </div>
+    </div>
+
+    <!-- 2. Main Application Layout -->
+    <div id="app-container" class="main-layout hidden">
+        <!-- Sidebar -->
+        <aside class="side-nav">
+            <div class="nav-brand">
+                <div class="mascot-container" style="width: 120px; height: 120px; border-width: 2px;">
+                    <img src="assets/brand/mascot.png" alt="Alon Mascot">
+                </div>
+                <h1 class="logo-text">ALON <span>HQ</span></h1>
+            </div>
+
+            <nav class="nav-links">
+                <button class="nav-item active" data-tab="chat">
+                    <span class="icon">💬</span> Messaging
+                </button>
+                <button class="nav-item" data-tab="todos">
+                    <span class="icon">📝</span> Mission Tasks
+                    <span class="badge" id="todo-count"
+                        style="background: var(--primary); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; margin-left: auto;">0</span>
+                </button>
+            </nav>
+
+            <div class="side-footer">
+                <div class="user-block">
+                    <div class="user-info">
+                        <span id="current-user-name">Not Logged In</span>
+                        <span class="user-status"
+                            style="color: var(--success); font-weight: bold; font-size: 0.7rem;">LEVEL: WHALE</span>
+                    </div>
+                    <div class="user-actions">
+                        <button id="link-telegram-btn" class="action-btn" title="Link Telegram">🔗</button>
+                        <button id="logout-btn" class="action-btn" title="Logout">⏻</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <header class="dash-header">
+                <div class="page-title">
+                    <h2 id="view-title" style="font-family: 'Outfit'; text-transform: uppercase; letter-spacing: 1px;">
+                        Control Center</h2>
+                    <div class="system-status"
+                        style="font-size: 0.8rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+                        <span class="status-indicator online" id="hq-status-dot"></span>
+                        <span id="hq-status-text">HQ UPLINK ACTIVE</span>
+                    </div>
+                </div>
+                <div class="header-tools">
+                    <div class="gateway-info"
+                        style="background: rgba(255,255,255,0.05); padding: 0.5rem 1rem; border-radius: 10px; border: 1px solid var(--border);">
+                        <span class="icon">📡</span>
+                        <span id="gateway-status" style="font-size: 0.8rem; font-weight: 600;">GATEWAY SYNCED</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="view-container">
+                <!-- Chat View -->
+                <section id="chat-view" class="view active">
+                    <div class="chat-wrapper">
+                        <div id="chat-messages" class="scroll-area">
+                            <div class="msg received">Welcome to the Alon Command Interface. All systems green.</div>
+                        </div>
+                        <div class="input-panel">
+                            <input type="text" id="message-input" placeholder="Enter command or message...">
+                            <button id="send-btn" class="icon-btn">🚀</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tasks View -->
+                <section id="todos-view" class="view">
+                    <div class="todo-wrapper" style="display: flex; flex-direction: column; gap: 2rem;">
+                        <div class="todo-controls">
+                            <div class="manual-add">
+                                <input type="text" id="manual-todo-input" placeholder="Define new objective...">
+                                <button id="add-todo-btn" class="icon-btn"
+                                    style="border-radius: 12px; font-weight: bold;">+</button>
+                            </div>
+                        </div>
+                        <div id="todo-list" class="todo-grid scroll-area">
+                            <!-- Tasks injected here -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
