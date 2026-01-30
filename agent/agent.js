@@ -272,6 +272,7 @@ function connectToGateway() {
             // Handle /link command (Priority)
             if (text.startsWith('/link ')) {
                 const code = text.replace('/link ', '').trim();
+                console.log(`Received /link command with code: ${code} from ${telegramId}`);
                 const linkData = linkCodes[code];
 
                 if (linkData && linkData.expires > Date.now()) {
@@ -286,7 +287,12 @@ function connectToGateway() {
                     const welcome = await askAlon("I just linked my wallet.", "New Recruit");
                     gatewayWs.send(JSON.stringify({ chatId: telegramId, text: welcome }));
                 } else {
-                    console.log(`Invalid link code from ${telegramId}`);
+                    console.log(`Invalid or expired link code '${code}' from ${telegramId}`);
+                    // Send feedback to user
+                    gatewayWs.send(JSON.stringify({
+                        chatId: telegramId,
+                        text: "❌ Invalid or expired link code. Please generate a new code from the Web UI."
+                    }));
                 }
                 return;
             }
@@ -361,10 +367,11 @@ function connectToGateway() {
     });
 
     gatewayWs.on('error', (e) => {
-        // console.error('Gateway error:', e.message);
+        console.error('Gateway connection error:', e.message);
     });
 
     gatewayWs.on('close', () => {
+        console.log('Gateway connection closed. Reconnecting in 5s...');
         setTimeout(connectToGateway, 5000);
     });
 }
