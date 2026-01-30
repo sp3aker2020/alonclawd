@@ -99,17 +99,25 @@ hqServer.on('connection', (ws) => {
                     console.log(`Wallet logged in: ${publicKey}`);
 
                     // Create User if not exists
-                    let user = await User.findOne({ wallet: publicKey });
-                    if (!user) {
-                        user = await User.create({ wallet: publicKey, todos: [] });
-                    }
+                    try {
+                        let user = await User.findOne({ wallet: publicKey });
+                        if (!user) {
+                            user = await User.create({ wallet: publicKey, todos: [] });
+                        }
 
-                    // Send success + initial state
-                    ws.send(JSON.stringify({
-                        type: 'LOGIN_SUCCESS',
-                        username: publicKey,
-                        todos: user.todos
-                    }));
+                        // Send success + initial state
+                        ws.send(JSON.stringify({
+                            type: 'LOGIN_SUCCESS',
+                            username: publicKey,
+                            todos: user.todos
+                        }));
+                    } catch (dbError) {
+                        console.error("Database Login Error:", dbError);
+                        ws.send(JSON.stringify({
+                            type: 'LOGIN_FAIL',
+                            message: "Database Error. Check server logs."
+                        }));
+                    }
                 } else {
                     ws.send(JSON.stringify({ type: 'LOGIN_FAIL', message: "Invalid Signature" }));
                 }
