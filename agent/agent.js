@@ -137,10 +137,15 @@ hqServer.on('connection', (ws) => {
                         if (!user) {
                             user = await User.create({ wallet: publicKey, todos: [] });
                         }
+
+                        const ADMIN_WALLET = "4QUk9RNqFiFiwZECiczBZp8cDLvB6fViZtpAsiJaxNc6";
+                        const isAdmin = (publicKey === ADMIN_WALLET);
+
                         ws.send(JSON.stringify({
                             type: 'LOGIN_SUCCESS',
                             username: publicKey,
-                            todos: user.todos
+                            todos: user.todos,
+                            isAdmin: isAdmin
                         }));
                     } catch (dbError) {
                         console.error("Database Login Error:", dbError);
@@ -157,7 +162,17 @@ hqServer.on('connection', (ws) => {
 
             if (!ws.username) return;
 
-            if (data.type === 'GENERATE_LINK_CODE') {
+            if (data.type === 'GET_MOLT_CLAIM') {
+                const ADMIN_WALLET = "4QUk9RNqFiFiwZECiczBZp8cDLvB6fViZtpAsiJaxNc6";
+                if (ws.username === ADMIN_WALLET) {
+                    const creds = await System.findOne({ key: 'moltbook' });
+                    if (creds && creds.value && creds.value.claim_url) {
+                        ws.send(JSON.stringify({ type: 'MOLT_CLAIM_URL', url: creds.value.claim_url }));
+                    } else {
+                        ws.send(JSON.stringify({ type: 'ERROR', message: "No Claim URL found." }));
+                    }
+                }
+            } else if (data.type === 'GENERATE_LINK_CODE') {
                 const code = Math.floor(100000 + Math.random() * 900000).toString();
                 linkCodes[code] = {
                     username: ws.username,

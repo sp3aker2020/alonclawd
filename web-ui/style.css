@@ -271,6 +271,62 @@ body {
     padding: 0.5rem;
 }
 
+/* Link Telegram Button */
+#link-telegram-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #2AABEE 0%, #229ED9 100%);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(42, 171, 238, 0.3);
+}
+
+#link-telegram-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(42, 171, 238, 0.4);
+}
+
+/* Claim Agent Button (Gold) */
+#claim-molt-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    border: none;
+    border-radius: 12px;
+    color: #1a1a2e;
+    /* Dark text for contrast on gold */
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    /* Hidden by default via inline style, toggled by JS */
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#claim-molt-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
+}
+
 .todo-card {
     background: rgba(30, 41, 59, 0.8);
     /* Much more opaque */

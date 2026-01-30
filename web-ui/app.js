@@ -110,13 +110,20 @@ async function handleWalletAuth() {
     }
 }
 
-function onLoginSuccess(username, todos) {
+function onLoginSuccess(username, todos, isAdmin) {
     state.username = username;
     state.todos = todos;
 
     currentUserName.textContent = username;
     modalLayer.classList.add('hidden');
     appLayout.classList.remove('hidden');
+
+    // Show Claim Button if Admin
+    if (isAdmin) {
+        document.getElementById('claim-molt-btn').style.display = 'flex';
+    } else {
+        document.getElementById('claim-molt-btn').style.display = 'none';
+    }
 
     renderTodos();
     // Gateway messages are now forwarded via HQ
@@ -128,6 +135,12 @@ function setupActionListeners() {
         if (hqWs?.readyState === WebSocket.OPEN) {
             hqWs.send(JSON.stringify({ type: 'GENERATE_LINK_CODE' }));
             showModal('link-modal');
+        }
+    });
+
+    document.getElementById('claim-molt-btn').addEventListener('click', () => {
+        if (hqWs && hqWs.readyState === WebSocket.OPEN) {
+            hqWs.send(JSON.stringify({ type: 'GET_MOLT_CLAIM' }));
         }
     });
 
@@ -168,13 +181,16 @@ function connectToHQ() {
 
     hqWs.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        if (data.type === 'LOGIN_SUCCESS') onLoginSuccess(data.username, data.todos);
+        if (data.type === 'LOGIN_SUCCESS') onLoginSuccess(data.username, data.todos, data.isAdmin);
         if (data.type === 'STATE_UPDATE') {
             state.todos = data.todos;
             renderTodos();
         }
         if (data.type === 'LINK_CODE') {
             document.getElementById('link-code-display').textContent = data.code;
+        }
+        if (data.type === 'MOLT_CLAIM_URL') {
+            window.open(data.url, '_blank');
         }
         if (data.type === 'CHAT_INCOMING') {
             addChatMessage(data.text, 'received');
