@@ -16,7 +16,7 @@ const HQ_PORT = process.env.PORT || 3000;
 // const USERS_FILE = path.join(DATA_DIR, 'users.json'); // Deprecated
 
 // MongoDB Configuration
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://agentinkyai_db_user:9P7r4ng4xTpP5Mfg@cluster0.xitgbaa.mongodb.net/tamaclaude?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://aloclawd:B2uIvM7EOmbly6CU@cluster0.xitgbaa.mongodb.net/tamaclaude?retryWrites=true&w=majority&appName=Cluster0';
 
 // Connect to MongoDB
 mongoose.connect(MONGODB_URI)
