@@ -1,11 +1,11 @@
-const https = require('https');
+const axios = require('axios');
 
 const BASE_URL = 'https://moltbook.com/api/v1';
 
 class MoltbookClient {
     constructor() {
         this.apiKey = null;
-        this.agentName = "Alon Clawd";
+        this.agentName = "Alon-Clawd";
         this.agentDesc = "Wealthy Solana Whale Agent. Stop being poor.";
     }
 
@@ -15,43 +15,29 @@ class MoltbookClient {
     }
 
     async request(endpoint, method = 'GET', body = null) {
-        return new Promise((resolve, reject) => {
-            const url = `${BASE_URL}${endpoint}`;
-            const options = {
+        try {
+            const config = {
                 method: method,
+                url: `${BASE_URL}${endpoint}`,
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                data: body
             };
 
             if (this.apiKey) {
-                options.headers['Authorization'] = `Bearer ${this.apiKey}`;
+                config.headers['Authorization'] = `Bearer ${this.apiKey}`;
             }
 
-            const req = https.request(url, options, (res) => {
-                let data = '';
-                res.on('data', (chunk) => data += chunk);
-                res.on('end', () => {
-                    try {
-                        const json = JSON.parse(data);
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            resolve(json);
-                        } else {
-                            reject({ status: res.statusCode, error: json });
-                        }
-                    } catch (e) {
-                        reject({ status: res.statusCode, error: data });
-                    }
-                });
-            });
-
-            req.on('error', (e) => reject(e));
-
-            if (body) {
-                req.write(JSON.stringify(body));
+            const response = await axios(config);
+            return response.data;
+        } catch (error) {
+            console.error(`Moltbook Request Error [${method} ${endpoint}]:`, error.message);
+            if (error.response) {
+                throw { status: error.response.status, error: error.response.data };
             }
-            req.end();
-        });
+            throw { error: error.message };
+        }
     }
 
     async register() {

@@ -1,6 +1,8 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') }); // Load environment variables from .env file
+
 const WebSocket = require('ws');
 const fs = require('fs');
-const path = require('path');
 const nacl = require('tweetnacl');
 const bs58 = require('bs58');
 const { TextEncoder } = require('util');
@@ -15,7 +17,12 @@ const GATEWAY_URL = process.env.GATEWAY_URL || 'ws://127.0.0.1:18789';
 const HQ_PORT = process.env.PORT || 3000;
 
 // MongoDB Configuration
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://aloclawd:B2uIvM7EOmbly6CU@cluster0.xitgbaa.mongodb.net/tamaclaude?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+    console.error("❌ MONGODB_URI is missing from environment variables.");
+    process.exit(1);
+}
 
 // Connect to MongoDB
 mongoose.connect(MONGODB_URI)
@@ -301,7 +308,12 @@ function connectToGateway() {
                         gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "Usage: /molt post Title | Content" }));
                     }
                 } else if (subCmd === 'claim') {
-                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "Check server logs for claim URL or use /molt status. (Implementation pending for easy URL retrieval)" }));
+                    const creds = await System.findOne({ key: 'moltbook' });
+                    if (creds && creds.value && creds.value.claim_url) {
+                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `🦞 Claim your Agent here: ${creds.value.claim_url}` }));
+                    } else {
+                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "⚠️ No claim URL found. Agent might not be registered yet." }));
+                    }
                 } else {
                     gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "Unknown /molt command. Try: status, post" }));
                 }
