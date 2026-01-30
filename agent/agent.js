@@ -34,15 +34,37 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
+// System Config Schema (for Agent Identity)
+const SystemSchema = new mongoose.Schema({
+    key: { type: String, required: true, unique: true },
+    value: mongoose.Schema.Types.Mixed
+});
+const System = mongoose.model('System', SystemSchema);
+
 // Auto-Register Moltbook on start
 async function initMoltbook() {
     try {
-        const reg = await moltbook.register();
-        if (reg.claim_url) {
+        // Check DB for credentials
+        const creds = await System.findOne({ key: 'moltbook' });
+
+        if (creds && creds.value && creds.value.api_key) {
+            moltbook.init(creds.value.api_key);
+            console.log("🦞 Moltbook: Identity Loaded from DB");
+        } else {
+            console.log("🦞 Moltbook: registering new identity...");
+            const reg = await moltbook.register();
+
+            // Save to DB
+            await System.create({
+                key: 'moltbook',
+                value: {
+                    api_key: reg.api_key,
+                    claim_url: reg.claim_url
+                }
+            });
+
             console.log("🦞 Moltbook Registration Successful!");
             console.log(`👉 CLAIM YOUR AGENT: ${reg.claim_url}`);
-        } else {
-            console.log("🦞 Moltbook: Ready (Already Registered)");
         }
     } catch (e) {
         console.error("Moltbook Init Failed:", e.message);

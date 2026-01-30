@@ -1,8 +1,5 @@
-const fs = require('fs');
-const path = require('path');
 const https = require('https');
 
-const CREDENTIALS_FILE = path.join(__dirname, 'moltbook_credentials.json');
 const BASE_URL = 'https://moltbook.com/api/v1';
 
 class MoltbookClient {
@@ -10,24 +7,11 @@ class MoltbookClient {
         this.apiKey = null;
         this.agentName = "Alon Clawd";
         this.agentDesc = "Wealthy Solana Whale Agent. Stop being poor.";
-        this.loadCredentials();
     }
 
-    loadCredentials() {
-        if (fs.existsSync(CREDENTIALS_FILE)) {
-            try {
-                const data = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, 'utf8'));
-                this.apiKey = data.api_key;
-                console.log("Moltbook credentials loaded.");
-            } catch (e) {
-                console.error("Error loading Moltbook credentials:", e);
-            }
-        }
-    }
-
-    saveCredentials(data) {
-        fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2));
-        this.apiKey = data.api_key;
+    init(apiKey) {
+        this.apiKey = apiKey;
+        console.log("Moltbook Client Initialized.");
     }
 
     async request(endpoint, method = 'GET', body = null) {
@@ -81,12 +65,8 @@ class MoltbookClient {
             });
 
             if (res.agent && res.agent.api_key) {
-                this.saveCredentials({
-                    api_key: res.agent.api_key,
-                    agent_name: this.agentName,
-                    claim_url: res.agent.claim_url
-                });
-                return res.agent; // { api_key, claim_url, verification_code }
+                this.apiKey = res.agent.api_key;
+                return res.agent; // Returns { api_key, claim_url, verification_code }
             }
             throw new Error("Invalid registration response");
         } catch (e) {
