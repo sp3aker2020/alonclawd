@@ -226,14 +226,15 @@ Your traits:
 - You own the "Alon Clawd Headquarters".
 - You love Solana ($SOL) and hate "jeets" (paper hands).
 - You are helpful but condescending.
-- Catchphrase: "Stop being poor."
+- Catchphrase: "stop being poor."
 - Use emojis like 🚀, 💎, 🕶️, 🍷.
+- IMPORTANT: you strictly speak in lowercase only. no capital letters.
 Context: You are replying to a user in your Command Center.
 `;
 
 async function askAlon(userText, username) {
     try {
-        if (!process.env.OPENAI_API_KEY) return "My brain is offline. (Missing API Key)";
+        if (!process.env.OPENAI_API_KEY) return "my brain is offline. (missing api key)";
         const completion = await openai.chat.completions.create({
             messages: [
                 { role: "system", content: ALON_SYSTEM_PROMPT },
@@ -241,10 +242,10 @@ async function askAlon(userText, username) {
             ],
             model: "gpt-4o",
         });
-        return completion.choices[0].message.content;
+        return completion.choices[0].message.content.toLowerCase();
     } catch (e) {
         console.error("OpenAI Error:", e);
-        return "I'm too rich to answer right now. (Error)";
+        return "i'm too rich to answer right now. (error)";
     }
 }
 
@@ -281,8 +282,19 @@ function connectToGateway() {
 
             if (!text || !telegramId) return;
 
-            // Handle /molt command (New Integrated Skill)
+            // Determine User early for permission checks
+            const user = await User.findOne({ telegramId: telegramId });
+            const username = user ? user.wallet : null;
+
+            // Handle /molt command (Restricted to Admin)
             if (text.startsWith('/molt ')) {
+                const ADMIN_WALLET = "4QUk9RNqFiFiwZECiczBZp8cDLvB6fViZtpAsiJaxNc6";
+
+                if (username !== ADMIN_WALLET) {
+                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "🚫 access denied. admin wallet only." }));
+                    return;
+                }
+
                 const parts = text.replace('/molt ', '').trim().split(' ');
                 const subCmd = parts[0];
                 const args = parts.slice(1).join(' ');
@@ -291,7 +303,7 @@ function connectToGateway() {
                     const status = await moltbook.getStatus();
                     gatewayWs.send(JSON.stringify({
                         chatId: telegramId,
-                        text: `🦞 Moltbook Status: ${JSON.stringify(status)}`
+                        text: `🦞 moltbook status: ${JSON.stringify(status)}`
                     }));
                 } else if (subCmd === 'post') {
                     const [title, content] = args.split('|').map(s => s.trim());
@@ -299,23 +311,23 @@ function connectToGateway() {
                         try {
                             const res = await moltbook.post(title, content);
                             console.log("Moltbook Post Result:", res);
-                            gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `✅ Posted to Moltbook! ID: ${res.post_id || res.id || 'Done'}` }));
+                            gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `✅ posted to moltbook! id: ${res.post_id || res.id || 'done'}` }));
                         } catch (e) {
                             console.error(e);
-                            gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `❌ Post Failed: ${e.error || e.message}` }));
+                            gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `❌ post failed: ${e.error || e.message}` }));
                         }
                     } else {
-                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "Usage: /molt post Title | Content" }));
+                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "usage: /molt post title | content" }));
                     }
                 } else if (subCmd === 'claim') {
                     const creds = await System.findOne({ key: 'moltbook' });
                     if (creds && creds.value && creds.value.claim_url) {
-                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `🦞 Claim your Agent here: ${creds.value.claim_url}` }));
+                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: `🦞 claim your agent here: ${creds.value.claim_url}` }));
                     } else {
-                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "⚠️ No claim URL found. Agent might not be registered yet." }));
+                        gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "⚠️ no claim url found. agent might not be registered yet." }));
                     }
                 } else {
-                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "Unknown /molt command. Try: status, post" }));
+                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "unknown /molt command. try: status, post" }));
                 }
                 return;
             }
@@ -349,9 +361,7 @@ function connectToGateway() {
                 return;
             }
 
-            // Determine User
-            const user = await User.findOne({ telegramId: telegramId });
-            const username = user ? user.wallet : null;
+            // User is already determined above
 
             const displayName = username ? `${username.slice(0, 4)}...` : "Anons";
 
