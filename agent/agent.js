@@ -7,12 +7,33 @@ const { TextEncoder } = require('util');
 const express = require('express');
 const http = require('http');
 const { OpenAI } = require('openai');
+const mongoose = require('mongoose');
 
 // Configuration
 const GATEWAY_URL = process.env.GATEWAY_URL || 'ws://127.0.0.1:18789';
 const HQ_PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+// const DATA_DIR = path.join(__dirname, 'data'); // Deprecated
+// const USERS_FILE = path.join(DATA_DIR, 'users.json'); // Deprecated
+
+// MongoDB Configuration
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://agentinkyai_db_user:9P7r4ng4xTpP5Mfg@cluster0.xitgbaa.mongodb.net/tamaclaude?retryWrites=true&w=majority&appName=Cluster0';
+
+// Connect to MongoDB
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ Connected to MongoDB'))
+    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+
+// MongoDB Schema
+const UserSchema = new mongoose.Schema({
+    wallet: { type: String, required: true, unique: true },
+    telegramId: { type: String, default: null },
+    todos: [{
+        id: Number,
+        text: String,
+        done: Boolean
+    }]
+});
+const User = mongoose.model('User', UserSchema);
 
 // --- Setup Express & HTTP Server ---
 const app = express();
@@ -37,58 +58,27 @@ function verifySolanaSignature(publicKeyStr, signatureStr, messageStr) {
     }
 }
 
-// State
-let users = {};
-let todosCache = {}; // username -> array
+// State (In-Memory for transient data)
 let linkCodes = {}; // code -> { username, expires }
-
-function saveUsers() {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
-// Load Users
-if (fs.existsSync(USERS_FILE)) {
-    try {
-        users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-        console.log(`Loaded ${Object.keys(users).length} users.`);
-    } catch (e) {
-        console.error("Error loading users:", e);
-    }
-}
-
-// Helper: Get Todos for User
-function getTodos(username) {
-    if (todosCache[username]) return todosCache[username];
-
-    const file = path.join(DATA_DIR, `todos_${username}.json`);
-    if (fs.existsSync(file)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-            todosCache[username] = data;
-            return data;
-        } catch (e) { console.error(`Error loading todos for ${username}`, e); }
-    }
-
-    // Default empty
-    todosCache[username] = [];
-    return todosCache[username];
-}
-
-function saveTodos(username) {
-    if (!todosCache[username]) return;
-    const file = path.join(DATA_DIR, `todos_${username}.json`);
-    fs.writeFileSync(file, JSON.stringify(todosCache[username], null, 2));
-}
-
-function getUserByTelegramId(tid) {
-    for (const [username, data] of Object.entries(users)) {
-        if (data.telegramId === tid) return username;
-    }
-    return null;
-}
 
 // --- Headquarters Server (for Web UI) ---
 const hqServer = new WebSocket.Server({ server });
+
+async function broadcastState(username) {
+    if (!username) return;
+
+    // Fetch latest state from DB
+    const user = await User.findOne({ wallet: username });
+    const todos = user ? user.todos : [];
+
+    const message = JSON.stringify({ type: 'STATE_UPDATE', todos: todos });
+
+    hqServer.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN && client.username === username) {
+            client.send(message);
+        }
+    });
+}
 
 hqServer.on('connection', (ws) => {
     console.log('Web Client connected (unauthenticated)');
@@ -108,14 +98,17 @@ hqServer.on('connection', (ws) => {
                     ws.username = publicKey; // Use Wallet as Username
                     console.log(`Wallet logged in: ${publicKey}`);
 
-                    // Auto-register if new (optional, or just load empty)
-                    // For now, we allow any valid signature to Login and have a private list
+                    // Create User if not exists
+                    let user = await User.findOne({ wallet: publicKey });
+                    if (!user) {
+                        user = await User.create({ wallet: publicKey, todos: [] });
+                    }
 
                     // Send success + initial state
                     ws.send(JSON.stringify({
                         type: 'LOGIN_SUCCESS',
                         username: publicKey,
-                        todos: getTodos(publicKey)
+                        todos: user.todos
                     }));
                 } else {
                     ws.send(JSON.stringify({ type: 'LOGIN_FAIL', message: "Invalid Signature" }));
@@ -142,33 +135,39 @@ hqServer.on('connection', (ws) => {
                 ws.send(JSON.stringify({ type: 'LINK_CODE', code }));
             } else if (data.type === 'ADD_TODO') {
                 const todo = { id: Date.now(), text: data.text, done: false };
-                getTodos(ws.username).push(todo);
-                saveTodos(ws.username);
-                broadcastState(ws.username);
+                await User.findOneAndUpdate(
+                    { wallet: ws.username },
+                    { $push: { todos: todo } },
+                    { upsert: true }
+                );
+                await broadcastState(ws.username);
             } else if (data.type === 'TOGGLE_TODO') {
-                const list = getTodos(ws.username);
-                const todo = list.find(t => t.id === data.id);
-                if (todo) {
-                    todo.done = !todo.done;
-                    saveTodos(ws.username);
-                    broadcastState(ws.username);
+                const user = await User.findOne({ wallet: ws.username });
+                if (user) {
+                    const todo = user.todos.find(t => t.id === data.id);
+                    if (todo) {
+                        todo.done = !todo.done;
+                        await user.save();
+                        await broadcastState(ws.username);
+                    }
                 }
             } else if (data.type === 'GET_TODOS') {
-                ws.send(JSON.stringify({ type: 'STATE_UPDATE', todos: getTodos(ws.username) }));
+                const user = await User.findOne({ wallet: ws.username });
+                ws.send(JSON.stringify({ type: 'STATE_UPDATE', todos: user ? user.todos : [] }));
             } else if (data.type === 'SEND_CHAT') {
                 // 1. Forward to Gateway (Telegram)
-                const tid = users[ws.username]?.telegramId;
+                // Fetch Telegram ID from DB
+                const user = await User.findOne({ wallet: ws.username });
+                const tid = user ? user.telegramId : null;
+
                 if (tid && gatewayWs && gatewayWs.readyState === WebSocket.OPEN) {
                     gatewayWs.send(JSON.stringify({
                         chatId: tid,
                         text: data.text
                     }));
-                } else {
-                    // Offline handling? 
                 }
 
-                // 2. Helper: Send AI "Thinking" state?
-                // For now, just ask AI
+                // 2. Generate AI Reply
                 const reply = await askAlon(data.text, ws.username);
 
                 // 3. Send AI Reply to User (Web)
@@ -190,18 +189,6 @@ hqServer.on('connection', (ws) => {
         }
     });
 });
-
-function broadcastState(username) {
-    if (!username) return;
-    const list = getTodos(username);
-    const message = JSON.stringify({ type: 'STATE_UPDATE', todos: list });
-
-    hqServer.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN && client.username === username) {
-            client.send(message);
-        }
-    });
-}
 
 // --- OpenAI Integration ---
 const openai = new OpenAI({
@@ -245,7 +232,13 @@ let gatewayWs;
 
 function connectToGateway() {
     console.log(`Connecting to Clawd Gateway at ${GATEWAY_URL}...`);
-    gatewayWs = new WebSocket(GATEWAY_URL);
+    let url = GATEWAY_URL;
+    if (!url.startsWith('ws')) {
+        // Auto-fix protocol if missing
+        url = `wss://${url}`;
+    }
+
+    gatewayWs = new WebSocket(url);
 
     gatewayWs.on('open', () => {
         console.log('Connected to Clawd Gateway!');
@@ -277,9 +270,14 @@ function connectToGateway() {
 
                 if (linkData && linkData.expires > Date.now()) {
                     const walletAddress = linkData.username;
-                    if (!users[walletAddress]) users[walletAddress] = {};
-                    users[walletAddress].telegramId = telegramId;
-                    saveUsers();
+
+                    // Update User with Telegram ID
+                    await User.findOneAndUpdate(
+                        { wallet: walletAddress },
+                        { telegramId: telegramId },
+                        { upsert: true }
+                    );
+
                     delete linkCodes[code];
                     console.log(`Linked Wallet ${walletAddress} to Telegram ${telegramId}`);
 
@@ -298,26 +296,29 @@ function connectToGateway() {
             }
 
             // Determine User
-            let username = null;
-            for (const [wallet, data] of Object.entries(users)) {
-                if (data.telegramId === telegramId) {
-                    username = wallet;
-                    break;
-                }
-            }
+            const user = await User.findOne({ telegramId: telegramId });
+            const username = user ? user.wallet : null;
+
             const displayName = username ? `${username.slice(0, 4)}...` : "Anons";
 
             // If text starts with /todo
             if (text.startsWith('/todo ')) {
                 if (username) {
                     const taskText = text.replace('/todo ', '').trim();
-                    getTodos(username).push({ id: Date.now(), text: taskText, done: false });
-                    saveTodos(username);
-                    broadcastState(username);
+                    const todo = { id: Date.now(), text: taskText, done: false };
+
+                    await User.findOneAndUpdate(
+                        { wallet: username },
+                        { $push: { todos: todo } }
+                    );
+
+                    await broadcastState(username);
 
                     // Reply
                     const reply = await askAlon(`I just added a task: ${taskText}`, displayName);
                     gatewayWs.send(JSON.stringify({ chatId: telegramId, text: reply }));
+                } else {
+                    gatewayWs.send(JSON.stringify({ chatId: telegramId, text: "🔒 Please link your wallet first using /link command." }));
                 }
             } else {
                 // Chat Message -> AI Reply
@@ -337,9 +338,6 @@ function connectToGateway() {
                 }
 
                 // 2. Generate AI Reply
-                // Only reply if not a command and roughly targeting the bot
-                // For direct DMs, always reply.
-                // We'll reply to everything for now as a "Chatbot"
                 const aiReply = await askAlon(text, displayName);
 
                 // 3. Send AI Reply to Telegram

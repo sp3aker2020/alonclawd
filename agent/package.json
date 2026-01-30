@@ -12,6 +12,7 @@
   "dependencies": {
     "bs58": "^6.0.0",
     "express": "^5.2.1",
+    "mongoose": "^9.1.5",
     "openai": "^6.16.0",
     "tweetnacl": "^1.0.3",
     "ws": "^8.19.0"
